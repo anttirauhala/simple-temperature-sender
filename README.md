@@ -5,11 +5,12 @@ Temperature and humidity monitoring system using Adafruit SHT30 sensor with AWS 
 ## Features
 
 - **SHT30 humidity/temperature sensor** - I2C bus (GPIO 8, 9)
-- **WiFi connectivity** - Connects to configured network
+- **WiFi connectivity** - Connects to configured network with automatic reconnection
 - **AWS IoT Core** - Publishes sensor data via MQTT every 5 minutes
-- **Green LED** - GPIO 3 (visual feedback)
-- **Button LED** - GPIO 2 and GPIO 4 button (user interface)
-- **Buzzer** - GPIO 5 (startup sound and feedback)
+- **Status LED (Green)** - GPIO 3 (system health indicator)
+- **Blue LED** - GPIO 2 (data transmission indicator)
+- **Button/Switch** - GPIO 4 (enables audio feedback)
+- **Buzzer** - GPIO 5 (startup melody and audio feedback)
 - **Serial monitor** - Displays sensor data at 115200 baud
 
 ## Functionality
@@ -17,43 +18,63 @@ Temperature and humidity monitoring system using Adafruit SHT30 sensor with AWS 
 ### Sensor Reading
 - Reads temperature and humidity every **2 seconds**
 - Publishes data to AWS IoT Core every **5 minutes**
+- Serial output shows real-time measurements
 
-### Green LED
-- Located on GPIO 3
-- Blinks when measurement is taken or data is published
+### Status LED (Green - GPIO 3)
+- **ON**: All systems operational (SHT30 initialized, WiFi connected, AWS connected)
+- **OFF**: System not ready or connection lost
+- **Blinking continuously**: SHT30 sensor initialization failed (error state)
+- Automatically monitors WiFi and AWS connection status
+- Turns OFF immediately when WiFi or AWS connection is lost
+- Turns back ON when both connections are restored
 
-### Button & Button LED
-- **Button** on GPIO 4 with internal pull-up (pressed = LOW)
-- **Button LED** on GPIO 2 (GPIO 2 output)
-- **Operation**: LED follows button state in real-time
-  - Button pressed → LED turns ON
-  - Button released → LED turns OFF
-- **Effect**: Toggles buzzer beep on/off when measurement is completed
-- When button is pressed, the system will beep when new sensor data is acquired
+### Blue LED (GPIO 2)
+- Blinks when data is published to AWS IoT Core (every 5 minutes)
+- Visual confirmation of successful data transmission
 
-### Buzzer
-- Located on GPIO 5
-- Plays startup melody on initialization
-- Generates tones by rapidly switching GPIO state
+### Switch & Audio Feedback (GPIO 4)
+- **Switch** on GPIO 4 with internal pull-up (ON = LOW)
+- **Effect**: Enables/disables buzzer audio feedback
+- When switch is ON:
+  - Beeps (2000Hz, 50ms) when sensor reads new data (every 2 seconds)
+  - Beeps (3000Hz, 50ms) when data is published to AWS (every 5 minutes)
+  - Beeps (250Hz, 150ms twice) if sensor reading fails
+  - Beeps (300Hz, 50ms) if AWS publish fails
+- When switch is OFF: All beeps are muted (except startup melody)
+
+### Buzzer (GPIO 5)
+- Plays startup melody when system initializes successfully
+- Provides audio feedback when switch is ON (see Switch section above)
+- Generates tones by PWM signal on GPIO 5
 
 ### SHT30 Initialization Failure
 - If the SHT30 sensor fails to initialize (communication error):
-  - **Buzzer**: Plays 3 warning beeps (1000Hz, 200ms each with 500ms pauses)
+  - **Buzzer**: Plays 4 warning beeps (1000Hz, 200ms each with 500ms pauses)
   - **Green LED**: Enters infinite blinking loop (visual error indicator)
-  - **Button LED**: Remains OFF
+  - **Blue LED**: Remains OFF
   - **Serial Output**: Displays "SHT30 not responding"
-  - **System**: Halts in error state, waiting for reset
+  - **System**: Halts in error state, waiting for manual reset
+
+### WiFi & AWS Connection Management
+- **Startup**: Retries WiFi and AWS connections until both succeed
+  - WiFi failure: Short beep (300Hz, 150ms), retry after 5s
+  - AWS failure: Two short beeps (300Hz, 150ms), retry after 5s
+  - Success beeps: 750Hz, 100ms (WiFi), then two 750Hz beeps (AWS)
+- **Runtime**: Automatically monitors and reconnects if connection drops
+  - WiFi: Reconnects immediately on disconnect
+  - AWS/MQTT: Reconnects every 30 seconds if disconnected
+  - Status LED reflects real-time connection status
 
 ## GPIO Mapping
 
-| GPIO | Function | Color |
-|------|----------|-------|
-| 2 | Button-LED output | - |
-| 3 | Green LED | - |
-| 4 | Button input | - |
-| 5 | Buzzer | - |
-| 8 | I2C SDA (SHT30) | Yellow |
-| 9 | I2C SCL (SHT30) | Green |
+| GPIO | Function | Description |
+|------|----------|-------------|
+| 2 | Blue LED output | Data transmission indicator |
+| 3 | Green LED output | System status indicator |
+| 4 | Switch input (pull-up) | Audio feedback enable/disable |
+| 5 | Buzzer output | Audio feedback |
+| 8 | I2C SDA (SHT30) | Sensor data line |
+| 9 | I2C SCL (SHT30) | Sensor clock line |
 
 ## Configuration
 

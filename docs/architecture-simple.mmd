@@ -1,0 +1,32 @@
+graph LR
+    subgraph Device["IoT Device"]
+        ESP[ESP32-C3<br/>+ SHT30 Sensor]
+    end
+    
+    subgraph AWS["AWS Cloud"]
+        IoT[AWS IoT Core<br/>MQTT Broker]
+        DDB[(DynamoDB<br/>temperature-measurements)]
+        API[API Gateway<br/>+ Lambda]
+    end
+    
+    subgraph Frontend["Web Application"]
+        Web[React Frontend<br/>Charts & Dashboard]
+    end
+    
+    ESP -->|1. MQTT Publish<br/>temp + humidity<br/>every 5 min| IoT
+    IoT -->|2. Store data| DDB
+    Web -->|3. GET /measurements| API
+    API -->|4. Query data| DDB
+    DDB -->|5. Return results| API
+    API -->|6. JSON response| Web
+    
+    %% Styling
+    classDef device fill:#e74c3c,stroke:#c0392b,stroke-width:3px,color:#fff
+    classDef aws fill:#FF9900,stroke:#CC7700,stroke-width:3px,color:#fff
+    classDef storage fill:#3498db,stroke:#2980b9,stroke-width:3px,color:#fff
+    classDef frontend fill:#2ecc71,stroke:#27ae60,stroke-width:3px,color:#fff
+    
+    class ESP device
+    class IoT,API aws
+    class DDB storage
+    class Web frontend

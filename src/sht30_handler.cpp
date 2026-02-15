@@ -3,8 +3,8 @@
 #include <Adafruit_SHT31.h>
 #include <buzzer.h>
 #include <led.h>
-#include <button_led.h>
 #include "mqtt_handler.h"
+#include <switch.h>
 
 // I2C pins for SHT30
 #define SDA_PIN 8
@@ -41,7 +41,7 @@ void initSHT30()
         while (1)
         {
             delay(350);
-            blinkLed();
+            blinkLed(LED_GREEN_PIN);
         }
     }
 
@@ -56,11 +56,10 @@ void updateSHT30Data()
     if (currentTime - lastReadTime >= READ_INTERVAL)
     {
         lastReadTime = currentTime;
-        if (isButtonPressed())
+        if (isSwitchOn())
         {
             beep(2000, 50);
         }
-        blinkLed();
 
         float t = sht31.readTemperature();
         float h = sht31.readHumidity();
@@ -81,17 +80,27 @@ void updateSHT30Data()
         else
         {
             Serial.println("Reading failed");
+            if(isSwitchOn())
+            {
+                turnOnLed(LED_BLUE_PIN);
+                beep(250, 150);
+                turnOffLed(LED_BLUE_PIN);
+                delay(50);
+                turnOnLed(LED_BLUE_PIN);
+                beep(250, 150);
+                turnOffLed(LED_BLUE_PIN);
+            }
         }
     }
 
     // Publish to AWS every 5 minutes
     if (currentTime - lastPublishTime >= PUBLISH_INTERVAL)
     {
-        if (isButtonPressed())
+        if (isSwitchOn())
         {
             beep(3000, 50);
         }
-        blinkLed();
+        blinkLed(LED_BLUE_PIN);
         lastPublishTime = currentTime;
         publishMeasurement(sensorTemperature, sensorHumidity);
         Serial.println("Data published to AWS");

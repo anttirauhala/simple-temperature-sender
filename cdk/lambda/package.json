@@ -1,0 +1,14 @@
+{
+  "name": "measurements-api",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.614.0",
+    "@aws-sdk/lib-dynamodb": "^3.614.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.143",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -5,6 +5,8 @@
 #include "config.h"
 #include <esp_wifi.h>
 #include <time.h>
+#include <switch.h>
+#include <buzzer.h>
 
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
@@ -79,7 +81,7 @@ bool connectToWiFi() {
     wifiEventRegistered = true;
   }
 
-  // Scan first (for diagnostics only)
+/*   // Scan first (for diagnostics only)
   Serial.println("Scanning WiFi networks...");
   int networkCount = WiFi.scanNetworks();
   if (networkCount <= 0) {
@@ -97,7 +99,7 @@ bool connectToWiFi() {
       Serial.println(WiFi.channel(i));
     }
   }
-  WiFi.scanDelete();  // Clear scan results before connecting
+  WiFi.scanDelete();  // Clear scan results before connecting */
 
   Serial.println("Attempting to connect to WiFi...");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -201,6 +203,10 @@ bool connectToAWS() {
 void publishMeasurement(float temperature, float humidity) {
   if (!client.connected()) {
     Serial.println("Cannot publish - MQTT not connected");
+    if(isSwitchOn())
+    {
+        beep(300, 50);
+    }
     return;
   }
   

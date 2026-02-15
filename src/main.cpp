@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "button_led.h"
+#include "switch.h"
 #include "sht30_handler.h"
 #include "buzzer.h"
 #include "led.h"
@@ -13,14 +13,12 @@ void setup()
   // Initialize hardware
   initBuzzer();
   initLed();
-  initButtonLed();
-  updateButtonLed();
   initSHT30();
 
   // Initialize AWS client (sets certificates & server)
   initializeAWSClient();
 
-  // Try Wifi and AWS connections until successful
+  // Try Wifi and AWS connections until successful6
   bool wifiConnected = false;
   bool awsConnected = false;
   int attempts = 0;
@@ -37,9 +35,7 @@ void setup()
       if (!wifiConnected) {
         Serial.println("WiFi failed - beeping and retrying in 5s");
         beep(300, 150);
-        turnOnLed();
         delay(5000);
-        turnOffLed();
         continue;
       }
     }
@@ -53,14 +49,6 @@ void setup()
         beep(300, 150);
         delay(50);
         beep(300, 150);
-        delay(50);
-        beep(300, 150);
-        for (int i = 0; i < 3; i++) {
-          turnOnLed();
-          delay(200);
-          turnOffLed();
-          delay(200);
-        }
         delay(5000);
       }
     }
@@ -68,14 +56,26 @@ void setup()
 
   Serial.println("\n✓ Both WiFi and AWS connected!");
   
+  // Turn on green LED to indicate all systems OK
+  turnOnLed(LED_GREEN_PIN);
+  
   Serial.println("Playing startup melody...");
+  turnOnLed(LED_BLUE_PIN);
   playStartupMelody();
+  turnOffLed(LED_BLUE_PIN);
 }
 
 void loop()
 {
+  // Check current connection status
+  bool wifiOk = (WiFi.status() == WL_CONNECTED);
+  bool awsOk = client.connected();
+  
+  // Handle status LED (green)
+  handleStatusLed(wifiOk, awsOk);
+  
   // Maintain WiFi connection
-  if (WiFi.status() != WL_CONNECTED) {
+  if (!wifiOk) {
     Serial.println("WiFi disconnected, reconnecting...");
     connectToWiFi();
   }
@@ -83,7 +83,6 @@ void loop()
   // Keep MQTT alive and reconnect if needed
   handleMQTT();
   
-  updateButtonLed();
   updateSHT30Data();
   delay(10);
 }

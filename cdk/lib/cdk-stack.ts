@@ -4,6 +4,10 @@ import * as iot from 'aws-cdk-lib/aws-iot';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as path from 'path';
 
 export class SimpleTemperatureBoxStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -98,6 +102,80 @@ export class SimpleTemperatureBoxStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // ============ LAMBDA FUNCTION (API) ============
+    const getMeasurementsLambda = new NodejsFunction(this, 'GetMeasurementsFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/getMeasurements.ts'),
+      environment: {
+        TABLE_NAME: table.tableName,
+        DEVICE_ID: 'SimpleTemperatureSender-ESP32-C3-supermini-1',
+      },
+      timeout: cdk.Duration.seconds(30),
+      bundling: {
+        minify: false,
+        sourceMap: true,
+        externalModules: ['@aws-sdk/*'],
+        forceDockerBundling: false,
+      },
+    });
+
+    // Grant Lambda read access to DynamoDB table
+    table.grantReadData(getMeasurementsLambda);
+
+    // ============ LAMBDA SECURITY ============
+    // Add resource policy to restrict Lambda invocation to API Gateway only
+    getMeasurementsLambda.addPermission('ApiGatewayInvoke', {
+      principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:*`,
+    });
+
+    // ============ API GATEWAY ============
+    const api = new apigateway.RestApi(this, 'MeasurementsApi', {
+      restApiName: 'Temperature Measurements API',
+      description: 'API to retrieve temperature and humidity measurements',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ['Content-Type', 'Authorization'],
+      },
+      deployOptions: {
+        throttlingRateLimit: 100,      // Max 100 requests per second
+        throttlingBurstLimit: 200,     // Max 200 concurrent requests
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        dataTraceEnabled: false,       // Don't log full request/response data
+        metricsEnabled: true,          // Enable CloudWatch metrics
+      },
+    });
+
+    // Create /measurements endpoint
+    const measurements = api.root.addResource('measurements');
+    const getMeasurementsMethod = measurements.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(getMeasurementsLambda, {
+        proxy: true,
+      })
+    );
+
+    // ============ API GATEWAY USAGE PLAN (RATE LIMITING) ============
+    const plan = api.addUsagePlan('MeasurementsUsagePlan', {
+      name: 'Basic Usage Plan',
+      description: 'Usage plan with rate limiting and quotas',
+      throttle: {
+        rateLimit: 10,           // Steady-state: 10 requests per second
+        burstLimit: 20,          // Burst: max 20 concurrent requests
+      },
+      quota: {
+        limit: 10000,            // Max 10,000 requests per month
+        period: apigateway.Period.MONTH,
+      },
+    });
+
+    // Associate the usage plan with the API stage
+    plan.addApiStage({
+      stage: api.deploymentStage,
+    });
+
     // ============ OUTPUTS ============
     new cdk.CfnOutput(this, 'DynamoDBTable', {
       value: table.tableName!,
@@ -127,6 +205,18 @@ export class SimpleTemperatureBoxStack extends cdk.Stack {
       value: this.account,
       description: 'AWS Account ID',
       exportName: 'SimpleTemperatureSenderAwsAccountId',
+    });
+
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: api.url,
+      description: 'API Gateway URL',
+      exportName: 'SimpleTemperatureSenderApiUrl',
+    });
+
+    new cdk.CfnOutput(this, 'ApiEndpoint', {
+      value: `${api.url}measurements`,
+      description: 'Measurements API Endpoint',
+      exportName: 'SimpleTemperatureSenderApiEndpoint',
     });
   }
 }

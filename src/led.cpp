@@ -1,26 +1,46 @@
 #include <Arduino.h>
-
-#define LED_GREEN_PIN 3
+#include <led.h>
 
 void initLed()
 {
   pinMode(LED_GREEN_PIN, OUTPUT);
+  pinMode(LED_BLUE_PIN, OUTPUT);
 }
 
-void blinkLed()
+void blinkLed(int led)
 {
-  digitalWrite(LED_GREEN_PIN, HIGH);
+  digitalWrite(led, HIGH);
   delay(100);
-  digitalWrite(LED_GREEN_PIN, LOW);
+  digitalWrite(led, LOW);
   delay(100);
 }
 
-void turnOnLed()
+void turnOnLed(int led)
 {
-  digitalWrite(LED_GREEN_PIN, HIGH);
+  digitalWrite(led, HIGH);
 }
 
-void turnOffLed()
+void turnOffLed(int led)
 {
-  digitalWrite(LED_GREEN_PIN, LOW);
+  digitalWrite(led, LOW);
+}
+
+void handleStatusLed(bool wifiConnected, bool awsConnected)
+{
+  static bool wasConnectedLastTime = true;
+  
+  bool allSystemsOk = wifiConnected && awsConnected;
+  
+  // Update green LED based on connection status
+  if (allSystemsOk && !wasConnectedLastTime) {
+    // Just reconnected - turn on LED
+    turnOnLed(LED_GREEN_PIN);
+    Serial.println("✓ All systems OK - Green LED ON");
+  } else if (!allSystemsOk && wasConnectedLastTime) {
+    // Just lost connection - turn off LED
+    turnOffLed(LED_GREEN_PIN);
+    if (!wifiConnected) Serial.println("✗ WiFi disconnected - Green LED OFF");
+    if (!awsConnected) Serial.println("✗ AWS disconnected - Green LED OFF");
+  }
+  wasConnectedLastTime = allSystemsOk;
 }

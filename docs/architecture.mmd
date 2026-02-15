@@ -1,0 +1,68 @@
+graph TB
+    subgraph ESP32["ESP32-C3 Supermini"]
+        SHT30[SHT30 Sensor<br/>Temperature & Humidity]
+        ESP[ESP32-C3<br/>WiFi + MQTT Client]
+    end
+    
+    subgraph AWS["AWS Cloud"]
+        subgraph IoT["AWS IoT Core"]
+            MQTT[MQTT Broker<br/>Topic: SimpleTemperatureSender/measurements]
+            Policy[IoT Policy<br/>SimpleTemperatureSenderPublishPolicy]
+            Rule[IoT Rule<br/>SimpleTemperatureSenderToDynamoDB]
+        end
+        
+        subgraph Database["Data Storage"]
+            DDB[(DynamoDB Table<br/>temperature-measurements<br/>PK: device_id<br/>SK: timestamp)]
+        end
+        
+        subgraph API["API Layer"]
+            Lambda[Lambda Function<br/>getMeasurements<br/>Node.js 20.x]
+            APIGW[API Gateway<br/>REST API<br/>Rate Limiting: 10 req/s<br/>Quota: 10k/month]
+        end
+        
+        subgraph Security["Security & Monitoring"]
+            IAM[IAM Roles & Policies]
+            CW[CloudWatch<br/>Logs & Metrics]
+        end
+    end
+    
+    subgraph Frontend["Frontend Application"]
+        Browser[Web Browser<br/>React + Vite]
+        Charts[Recharts<br/>Temperature & Humidity Charts]
+    end
+    
+    %% Data Flow
+    SHT30 -->|I2C| ESP
+    ESP -->|MQTT over TLS<br/>Port 8883<br/>Every 5 min| MQTT
+    
+    MQTT -->|Authentication| Policy
+    Policy -->|Authorized| Rule
+    
+    Rule -->|SQL Query<br/>Extract & Transform| DDB
+    Rule -->|Logs| CW
+    
+    Browser -->|HTTPS GET<br/>/measurements?startTime=X| APIGW
+    APIGW -->|Throttling & Auth| Lambda
+    Lambda -->|Query<br/>device_id + timestamp range| DDB
+    DDB -->|Return measurements| Lambda
+    Lambda -->|JSON Response<br/>aggregated data| APIGW
+    APIGW -->|CORS headers| Browser
+    Browser -->|Render| Charts
+    
+    IAM -.->|Permissions| Lambda
+    IAM -.->|Permissions| Rule
+    Lambda -.->|Metrics| CW
+    APIGW -.->|Metrics| CW
+    
+    %% Styling
+    classDef hardware fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
+    classDef aws fill:#FF9900,stroke:#CC7700,stroke-width:2px,color:#fff
+    classDef storage fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#fff
+    classDef frontend fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff
+    classDef security fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#fff
+    
+    class SHT30,ESP hardware
+    class MQTT,Policy,Rule,Lambda,APIGW aws
+    class DDB storage
+    class Browser,Charts frontend
+    class IAM,CW security
