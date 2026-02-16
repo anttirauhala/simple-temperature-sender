@@ -7,11 +7,22 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as path from 'path';
 
 export class SimpleTemperatureBoxStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // ============ SNS TOPIC FOR ALERTS ============
+    const alertTopic = new sns.Topic(this, 'TemperatureAlertTopic', {
+      displayName: 'Temperature Alert Notifications',
+      topicName: 'temperature-alerts',
+    });
+
+    // Huom: Lisää sähköpostiosoite täällä stackin luomisen jälkeen
+    // Esim: alertTopic.addSubscription(new subscriptions.EmailSubscription('sinun@sahkoposti.fi'));
 
     // ============ DYNAMODB TABLE ============
     const table = new dynamodb.Table(this, 'SimpleTemperatureSenderTable', {
@@ -72,6 +83,32 @@ export class SimpleTemperatureBoxStack extends cdk.Stack {
       })
     );
 
+    // ============ LAMBDA FUNCTION (TEMPERATURE ALERTS) ============
+    const checkAlertsLambda = new NodejsFunction(this, 'CheckTemperatureAlertsFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/checkTemperatureAlerts.ts'),
+      environment: {
+        SNS_TOPIC_ARN: alertTopic.topicArn,
+      },
+      timeout: cdk.Duration.seconds(10),
+      bundling: {
+        minify: false,
+        sourceMap: true,
+        externalModules: ['@aws-sdk/*'],
+        forceDockerBundling: false,
+      },
+    });
+
+    // Grant Lambda permission to publish to SNS topic
+    alertTopic.grantPublish(checkAlertsLambda);
+
+    // Grant IoT Core permission to invoke Lambda
+    checkAlertsLambda.addPermission('IoTInvoke', {
+      principal: new iam.ServicePrincipal('iot.amazonaws.com'),
+      sourceArn: `arn:aws:iot:${this.region}:${this.account}:rule/*`,
+    });
+
     // ============ IOT CORE TOPIC RULE ============
     const topicRule = new iot.CfnTopicRule(this, 'SimpleTemperatureSenderTopicRule', {
       ruleName: 'SimpleTemperatureSenderToDynamoDB',
@@ -90,6 +127,11 @@ export class SimpleTemperatureBoxStack extends cdk.Stack {
               putItem: {
                 tableName: table.tableName!,
               },
+            },
+          },
+          {
+            lambda: {
+              functionArn: checkAlertsLambda.functionArn,
             },
           },
         ],
@@ -217,6 +259,12 @@ export class SimpleTemperatureBoxStack extends cdk.Stack {
       value: `${api.url}measurements`,
       description: 'Measurements API Endpoint',
       exportName: 'SimpleTemperatureSenderApiEndpoint',
+    });
+
+    new cdk.CfnOutput(this, 'AlertTopicArn', {
+      value: alertTopic.topicArn,
+      description: 'SNS Topic ARN for temperature alerts',
+      exportName: 'SimpleTemperatureSenderAlertTopicArn',
     });
   }
 }
