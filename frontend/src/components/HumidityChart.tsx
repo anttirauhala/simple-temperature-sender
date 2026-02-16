@@ -8,7 +8,7 @@ interface Measurement {
   humidity: number
 }
 
-type TimeRange = 'today' | 'thisMonth' | 'lastMonth'
+type TimeRange = 'today' | 'thisMonth' | 'lastMonth' | 'thisYear'
 
 interface Props {
   measurements: Measurement[]
@@ -26,6 +26,8 @@ function HumidityChart({ measurements, currentValue, timestamp, timeRange = 'tod
       case 'thisMonth':
       case 'lastMonth':
         return 'd.M HH:mm'
+      case 'thisYear':
+        return 'd.M.yyyy'
     }
   }
 

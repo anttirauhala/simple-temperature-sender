@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { format, startOfMonth, subMonths } from 'date-fns'
+import { format, startOfMonth, startOfYear, subMonths } from 'date-fns'
 import { fi } from 'date-fns/locale'
 import TemperatureChart from './components/TemperatureChart'
 import HumidityChart from './components/HumidityChart'
@@ -11,7 +11,7 @@ interface Measurement {
   device_id: string
 }
 
-type TimeRange = 'today' | 'thisMonth' | 'lastMonth'
+type TimeRange = 'today' | 'thisMonth' | 'lastMonth' | 'thisYear'
 
 function App() {
   const [measurements, setMeasurements] = useState<Measurement[]>([])
@@ -101,6 +101,13 @@ function App() {
           start: startOfMonth(lastMonth).getTime(),
           end: startOfMonth(now).getTime()
         }
+      
+      case 'thisYear':
+        const nextYear = new Date(now.getFullYear() + 1, 0, 1)
+        return {
+          start: startOfYear(now).getTime(),
+          end: nextYear.getTime()
+        }
     }
   }
 
@@ -134,11 +141,14 @@ function App() {
       
       setMeasurements(rawMeasurements)
       
-      // Aggregate data for month views
+      // Aggregate data for month and year views
       let processed = rawMeasurements
       if (range === 'thisMonth' || range === 'lastMonth') {
         // Aggregate to hourly data for month view
         processed = aggregateData(rawMeasurements, 60)
+      } else if (range === 'thisYear') {
+        // Aggregate to daily data for year view
+        processed = aggregateData(rawMeasurements, 24 * 60)
       }
       
       setDisplayMeasurements(processed)
@@ -167,6 +177,7 @@ function App() {
       case 'today': return 'tänään'
       case 'thisMonth': return 'tässä kuussa'
       case 'lastMonth': return 'viime kuussa'
+      case 'thisYear': return 'tänä vuonna'
     }
   }
 
@@ -180,6 +191,8 @@ function App() {
       case 'lastMonth': 
         const lastMonth = subMonths(now, 1)
         return format(lastMonth, 'MMMM yyyy', { locale: fi })
+      case 'thisYear':
+        return format(now, 'yyyy', { locale: fi })
     }
   }
 
@@ -207,6 +220,12 @@ function App() {
             onClick={() => setTimeRange('lastMonth')}
           >
             Edellinen kuukausi
+          </button>
+          <button
+            className={`time-range-btn ${timeRange === 'thisYear' ? 'active' : ''}`}
+            onClick={() => setTimeRange('thisYear')}
+          >
+            Tämä vuosi
           </button>
         </div>
 
